@@ -10,8 +10,10 @@ import hmac
 import jwt
 from typing import Dict, Any, Optional
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import OperationalError
 
 from config import settings
+from database.database import init_db
 from database.models import User, CareerGoal
 from utils.logger import logger
 
@@ -75,7 +77,13 @@ class AuthService:
         if len(password) < 6:
             raise ValueError("Password must be at least 6 characters long.")
 
-        existing_user = db.query(User).filter(User.email == clean_email).first()
+        try:
+            existing_user = db.query(User).filter(User.email == clean_email).first()
+        except OperationalError:
+            logger.warning("OperationalError detected during user registration query. Auto-healing database schema...")
+            init_db()
+            existing_user = db.query(User).filter(User.email == clean_email).first()
+
         if existing_user:
             raise ValueError("An account with this email address already exists. Please sign in.")
 
@@ -110,7 +118,13 @@ class AuthService:
     ) -> Dict[str, Any]:
         """Authenticates user via email and password."""
         clean_email = email.strip().lower()
-        user = db.query(User).filter(User.email == clean_email).first()
+        try:
+            user = db.query(User).filter(User.email == clean_email).first()
+        except OperationalError:
+            logger.warning("OperationalError detected during login query. Auto-healing database schema...")
+            init_db()
+            user = db.query(User).filter(User.email == clean_email).first()
+
         if not user:
             raise ValueError("Invalid email or password.")
 
@@ -131,7 +145,12 @@ class AuthService:
     ) -> Dict[str, Any]:
         """Authenticates or registers user via Google OAuth Identity."""
         clean_email = email.strip().lower()
-        user = db.query(User).filter(User.email == clean_email).first()
+        try:
+            user = db.query(User).filter(User.email == clean_email).first()
+        except OperationalError:
+            logger.warning("OperationalError detected during Google OAuth query. Auto-healing database schema...")
+            init_db()
+            user = db.query(User).filter(User.email == clean_email).first()
 
         if user:
             user.auth_id = google_id or user.auth_id or f"goog_{uuid.uuid4().hex[:12]}"
@@ -163,7 +182,12 @@ class AuthService:
     def request_password_reset(self, email: str, db: Session) -> Dict[str, Any]:
         """Generates password reset token."""
         clean_email = email.strip().lower()
-        user = db.query(User).filter(User.email == clean_email).first()
+        try:
+            user = db.query(User).filter(User.email == clean_email).first()
+        except OperationalError:
+            init_db()
+            user = db.query(User).filter(User.email == clean_email).first()
+
         if not user:
             return {"message": "If an account exists for this email, password reset instructions have been sent."}
 
