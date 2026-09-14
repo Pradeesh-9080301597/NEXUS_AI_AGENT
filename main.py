@@ -53,6 +53,98 @@ def health_check():
     return {"status": "online", "app": settings.APP_NAME}
 
 
+# --- AUTHENTICATION ENDPOINTS ---
+
+from services.auth_service import auth_service
+from schemas.user import UserRegister, UserLogin, GoogleAuthInput, PasswordResetRequest, PasswordResetConfirm
+
+@app.post("/auth/register", response_model=APIResponse, tags=["Authentication"])
+def register(user_in: UserRegister, db: Session = Depends(get_db)):
+    """Registers a new user account."""
+    try:
+        res = auth_service.register_user(
+            email=user_in.email,
+            password=user_in.password,
+            name=user_in.name,
+            db=db
+        )
+        user = res["user"]
+        return APIResponse(
+            success=True,
+            message="Registration successful.",
+            data={
+                "user_id": user.id,
+                "email": user.email,
+                "name": user.name,
+                "access_token": res["access_token"]
+            }
+        )
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        logger.error(f"Error registering user: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/auth/login", response_model=APIResponse, tags=["Authentication"])
+def login(login_in: UserLogin, db: Session = Depends(get_db)):
+    """Authenticates user via email and password."""
+    try:
+        res = auth_service.login_user(email=login_in.email, password=login_in.password, db=db)
+        user = res["user"]
+        return APIResponse(
+            success=True,
+            message="Sign in successful.",
+            data={
+                "user_id": user.id,
+                "email": user.email,
+                "name": user.name,
+                "access_token": res["access_token"]
+            }
+        )
+    except ValueError as ve:
+        raise HTTPException(status_code=401, detail=str(ve))
+
+@app.post("/auth/google", response_model=APIResponse, tags=["Authentication"])
+def google_auth(auth_in: GoogleAuthInput, db: Session = Depends(get_db)):
+    """Authenticates user via Google OAuth mechanism."""
+    try:
+        res = auth_service.google_login_or_register(
+            email=auth_in.email,
+            name=auth_in.name or "",
+            google_id=auth_in.google_id or "",
+            db=db
+        )
+        user = res["user"]
+        return APIResponse(
+            success=True,
+            message="Google authentication successful.",
+            data={
+                "user_id": user.id,
+                "email": user.email,
+                "name": user.name,
+                "access_token": res["access_token"]
+            }
+        )
+    except Exception as e:
+        logger.error(f"Error in Google auth: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/auth/forgot-password", response_model=APIResponse, tags=["Authentication"])
+def forgot_password(reset_req: PasswordResetRequest, db: Session = Depends(get_db)):
+    """Generates password reset link/token."""
+    res = auth_service.request_password_reset(email=reset_req.email, db=db)
+    return APIResponse(success=True, message=res["message"], data={"reset_token": res.get("reset_token")})
+
+@app.post("/auth/reset-password", response_model=APIResponse, tags=["Authentication"])
+def reset_password(confirm_in: PasswordResetConfirm, db: Session = Depends(get_db)):
+    """Resets password using valid token."""
+    try:
+        auth_service.reset_password(token=confirm_in.token, new_password=confirm_in.new_password, db=db)
+        return APIResponse(success=True, message="Password updated successfully.")
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+
+
 # --- USER PROFILE ENDPOINTS ---
 
 @app.post("/profile", response_model=APIResponse, tags=["Profile"])

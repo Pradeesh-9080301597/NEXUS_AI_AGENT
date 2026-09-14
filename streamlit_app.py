@@ -1,6 +1,6 @@
 """
 NEXUS - AI Career Intelligence Agent
-Streamlit Frontend Multi-Page Web Interface
+Streamlit Frontend Multi-Page Web Interface with Authentication & Protection
 """
 
 import streamlit as st
@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from database.database import SessionLocal, init_db
 from database.models import User, UserSkill, CareerGoal, Roadmap, UserProgress
+from services.auth_service import auth_service
 from tools.skill_analyzer import analyze_skills
 from tools.skill_gap_analyzer import identify_skill_gaps
 from tools.roadmap_generator import generate_roadmap
@@ -34,13 +35,13 @@ st.markdown("""
         color: #F8FAFC;
         font-family: 'Inter', sans-serif;
     }
-    
+
     /* Sidebar Styling */
     section[data-testid="stSidebar"] {
         background-color: #1E293B;
         border-right: 1px solid #334155;
     }
-    
+
     /* Metric Cards */
     .metric-card {
         background: linear-gradient(135deg, #1E293B 0%, #0F172A 100%);
@@ -54,7 +55,7 @@ st.markdown("""
         transform: translateY(-2px);
         border-color: #38BDF8;
     }
-    
+
     /* Custom Badges */
     .badge-completed {
         background-color: #059669;
@@ -80,7 +81,7 @@ st.markdown("""
         font-size: 0.8rem;
         font-weight: 600;
     }
-    
+
     /* Primary Buttons */
     .stButton>button {
         background: linear-gradient(90deg, #2563EB 0%, #3B82F6 100%);
@@ -104,47 +105,146 @@ init_db()
 def get_db_session() -> Session:
     return SessionLocal()
 
-# --- HELPER FUNCTIONS FOR USER STATE ---
-def load_default_user(db: Session) -> User:
-    """Loads existing default user or creates initial profile."""
-    user = db.query(User).first()
-    if not user:
-        user = User(
-            name="Pradeesh",
-            education="Computer Science Engineering",
-            experience_level="Beginner"
-        )
-        db.add(user)
-        db.commit()
-        db.refresh(user)
-
-        # Initial Career Goal
-        goal = CareerGoal(user_id=user.id, target_role="AI Engineer", timeframe_months=6)
-        db.add(goal)
-
-        # Initial Skills
-        initial_skills = ["Java", "HTML", "CSS", "JavaScript", "Machine Learning"]
-        for s in initial_skills:
-            db.add(UserSkill(user_id=user.id, skill_name=s, status="COMPLETED"))
-
-        db.commit()
-        db.refresh(user)
-    return user
-
-# Session state initialization
+# Session State Initialization
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
 if "user_id" not in st.session_state:
-    db = get_db_session()
-    user = load_default_user(db)
-    st.session_state.user_id = user.id
-    db.close()
-
+    st.session_state.user_id = None
+if "user_email" not in st.session_state:
+    st.session_state.user_email = None
+if "user_name" not in st.session_state:
+    st.session_state.user_name = None
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
-# --- SIDEBAR NAVIGATION ---
-st.sidebar.image("https://img.icons8.com/isometric-folders/100/brain.png", width=60)
+
+# ==========================================
+# AUTHENTICATION PORTAL (PROTECTED ROUTE)
+# ==========================================
+if not st.session_state.authenticated:
+    st.markdown("""
+    <div style="text-align: center; padding: 40px 0 20px 0;">
+        <h1 style="color: #38BDF8; font-size: 3rem; margin-bottom: 0;">NEXUS AI</h1>
+        <p style="color: #94A3B8; font-size: 1.2rem;">AI-Powered Career Intelligence Platform</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    auth_col1, auth_col2, auth_col3 = st.columns([1, 2, 1])
+
+    with auth_col2:
+        auth_tab1, auth_tab2, auth_tab3 = st.tabs(["🔑 Sign In", "📝 Create Account", "🔒 Forgot Password"])
+
+        # --- SIGN IN TAB ---
+        with auth_tab1:
+            st.subheader("Welcome Back")
+            with st.form("signin_form"):
+                login_email = st.text_input("Email Address", placeholder="you@domain.com")
+                login_pass = st.text_input("Password", type="password", placeholder="••••••••")
+                submit_login = st.form_submit_button("Sign In to NEXUS")
+
+                if submit_login:
+                    db = get_db_session()
+                    try:
+                        res = auth_service.login_user(login_email, login_pass, db)
+                        user_obj = res["user"]
+                        st.session_state.authenticated = True
+                        st.session_state.user_id = user_obj.id
+                        st.session_state.user_email = user_obj.email
+                        st.session_state.user_name = user_obj.name
+                        st.success(f"Welcome back, {user_obj.name}!")
+                        db.close()
+                        st.rerun()
+                    except ValueError as ve:
+                        st.error(str(ve))
+                    db.close()
+
+            st.markdown("---")
+            st.markdown("##### Or Sign In With Official Identity:")
+
+            # Google OAuth Button
+            if st.button("🌐 Continue with Google", key="btn_google_signin"):
+                db = get_db_session()
+                # Mock/Development Google OAuth Handler
+                res = auth_service.google_login_or_register(
+                    email=login_email if "@" in login_email else "student@google.com",
+                    name="Google Student",
+                    google_id="google_oauth_sub_102030",
+                    db=db
+                )
+                user_obj = res["user"]
+                st.session_state.authenticated = True
+                st.session_state.user_id = user_obj.id
+                st.session_state.user_email = user_obj.email
+                st.session_state.user_name = user_obj.name
+                db.close()
+                st.success("Google Sign-In Successful!")
+                st.rerun()
+
+        # --- REGISTER TAB ---
+        with auth_tab2:
+            st.subheader("Create Your NEXUS Account")
+            with st.form("register_form"):
+                reg_name = st.text_input("Full Name", placeholder="Pradeesh")
+                reg_email = st.text_input("Email Address", placeholder="student@university.edu")
+                reg_pass = st.text_input("Password (min 6 chars)", type="password", placeholder="••••••••")
+                submit_reg = st.form_submit_button("Create Account")
+
+                if submit_reg:
+                    db = get_db_session()
+                    try:
+                        res = auth_service.register_user(reg_email, reg_pass, reg_name, db)
+                        user_obj = res["user"]
+                        st.session_state.authenticated = True
+                        st.session_state.user_id = user_obj.id
+                        st.session_state.user_email = user_obj.email
+                        st.session_state.user_name = user_obj.name
+                        st.success("Account created successfully!")
+                        db.close()
+                        st.rerun()
+                    except ValueError as ve:
+                        st.error(str(ve))
+                    db.close()
+
+        # --- FORGOT PASSWORD TAB ---
+        with auth_tab3:
+            st.subheader("Reset Password")
+            with st.form("reset_request_form"):
+                reset_email = st.text_input("Enter Account Email Address", placeholder="you@domain.com")
+                submit_reset_req = st.form_submit_button("Request Reset Link")
+
+                if submit_reset_req:
+                    db = get_db_session()
+                    res = auth_service.request_password_reset(reset_email, db)
+                    db.close()
+                    st.info(res["message"])
+                    if "reset_token" in res and res["reset_token"]:
+                        st.code(f"Reset Token (Dev Mode): {res['reset_token']}", language="text")
+
+            with st.form("reset_confirm_form"):
+                token_in = st.text_input("Reset Token")
+                new_pass_in = st.text_input("New Password", type="password")
+                submit_new_pass = st.form_submit_button("Update Password")
+
+                if submit_new_pass:
+                    db = get_db_session()
+                    try:
+                        auth_service.reset_password(token_in, new_pass_in, db)
+                        st.success("Password reset successful! Please sign in with your new password.")
+                    except ValueError as ve:
+                        st.error(str(ve))
+                    db.close()
+
+    st.stop()  # Prevent unauthenticated users from seeing dashboard content
+
+
+# ==========================================
+# AUTHENTICATED APPLICATION INTERFACE
+# ==========================================
+
+# Sidebar Navigation & User Info
+st.sidebar.image("https://img.icons8.com/isometric-folders/100/brain.png", width=50)
 st.sidebar.title("NEXUS AI")
-st.sidebar.caption("Career Intelligence Agent v1.0")
+st.sidebar.caption(f"Logged in as: **{st.session_state.user_name}**")
 
 page = st.sidebar.radio(
     "Navigation Menu",
@@ -159,22 +259,32 @@ page = st.sidebar.radio(
     ]
 )
 
-# Fetch user context
+# Logout Action Button
+if st.sidebar.button("🚪 Logout", key="btn_logout"):
+    st.session_state.authenticated = False
+    st.session_state.user_id = None
+    st.session_state.user_email = None
+    st.session_state.user_name = None
+    st.session_state.chat_history = []
+    st.rerun()
+
+# Fetch active user context
 db = get_db_session()
 user = db.query(User).filter(User.id == st.session_state.user_id).first()
+if not user:
+    st.session_state.authenticated = False
+    st.rerun()
+
 target_role = user.career_goals[0].target_role if user.career_goals else "AI Engineer"
 completed_skills = [s.skill_name for s in user.skills if s.status == "COMPLETED"]
 db.close()
 
 
-# ==========================================
 # PAGE 1: DASHBOARD
-# ==========================================
 if page == "📊 Dashboard":
     st.title("🎯 Career Intelligence Dashboard")
-    st.markdown(f"Welcome back, **{user.name}**! Here is your AI-driven career overview.")
+    st.markdown(f"Welcome back, **{user.name}** (`{user.email}`)! Here is your AI-driven career overview.")
 
-    # Calculate live readiness score
     analysis = analyze_skills(completed_skills, target_role)
     readiness = analysis["readiness_score_percentage"]
     missing = analysis["missing_skills"]
@@ -217,25 +327,26 @@ if page == "📊 Dashboard":
     st.info(f"**Action Required**: Focus on acquiring **{next_topic}**. Completing this module will boost your readiness score to {min(readiness + 15.0, 100.0):.1f}%.")
 
     st.subheader("⚡ Current Skills Inventory")
-    skills_cols = st.columns(5)
-    for idx, skill in enumerate(completed_skills):
-        skills_cols[idx % 5].success(f"✓ {skill}")
+    if completed_skills:
+        skills_cols = st.columns(5)
+        for idx, skill in enumerate(completed_skills):
+            skills_cols[idx % 5].success(f"✓ {skill}")
+    else:
+        st.write("No skills added yet. Update your profile skills to get started!")
 
 
-# ==========================================
 # PAGE 2: MY PROFILE
-# ==========================================
 elif page == "👤 My Profile":
     st.title("👤 My Career Profile")
 
     with st.form("profile_form"):
         name_in = st.text_input("Full Name", value=user.name)
         edu_in = st.text_input("Education Background", value=user.education or "")
-        exp_in = st.selectbox("Experience Level", ["Beginner", "Intermediate", "Advanced"], index=["Beginner", "Intermediate", "Advanced"].index(user.experience_level))
-        
+        exp_in = st.selectbox("Experience Level", ["Beginner", "Intermediate", "Advanced"], index=["Beginner", "Intermediate", "Advanced"].index(user.experience_level if user.experience_level in ["Beginner", "Intermediate", "Advanced"] else "Beginner"))
+
         roles_list = list(CAREER_SKILL_CATALOG.keys())
         goal_in = st.selectbox("Target Career Goal", roles_list, index=roles_list.index(target_role) if target_role in roles_list else 0)
-        
+
         skills_raw = st.text_area("Current Skills (Comma Separated)", value=", ".join(completed_skills))
 
         submit = st.form_submit_button("Save & Update Profile")
@@ -251,7 +362,6 @@ elif page == "👤 My Profile":
             else:
                 db.add(CareerGoal(user_id=user.id, target_role=goal_in))
 
-            # Update skills
             db.query(UserSkill).filter(UserSkill.user_id == user.id).delete()
             new_skills = [s.strip() for s in skills_raw.split(",") if s.strip()]
             for ns in new_skills:
@@ -259,16 +369,15 @@ elif page == "👤 My Profile":
 
             db.commit()
             db.close()
+            st.session_state.user_name = name_in
             st.success("Profile updated successfully!")
             st.rerun()
 
 
-# ==========================================
 # PAGE 3: SKILL ANALYSIS
-# ==========================================
 elif page == "⚡ Skill Analysis":
     st.title("⚡ Skill Analysis & Gap Report")
-    
+
     analysis_data = identify_skill_gaps(completed_skills, target_role)
     report = analysis_data["report"]
 
@@ -287,14 +396,12 @@ elif page == "⚡ Skill Analysis":
         """, unsafe_allow_html=True)
 
 
-# ==========================================
 # PAGE 4: CAREER ROADMAP
-# ==========================================
 elif page == "🗺️ Career Roadmap":
     st.title("🗺️ Personalized Learning Roadmap")
 
     roadmap_data = generate_roadmap(completed_skills, target_role, user.experience_level)
-    
+
     st.markdown(f"### Target Career: **{target_role}** ({roadmap_data['total_months']} Months Plan)")
     st.markdown("---")
 
@@ -305,9 +412,7 @@ elif page == "🗺️ Career Roadmap":
             st.markdown(f"**Practice Recommendations**: {item['practice_tasks']}")
 
 
-# ==========================================
 # PAGE 5: PROJECT RECOMMENDATIONS
-# ==========================================
 elif page == "💡 Project Recommendations":
     st.title("💡 Recommended Portfolio Projects")
 
@@ -325,9 +430,7 @@ elif page == "💡 Project Recommendations":
         """, unsafe_allow_html=True)
 
 
-# ==========================================
 # PAGE 6: PROGRESS TRACKER
-# ==========================================
 elif page == "📈 Progress Tracker":
     st.title("📈 Progress Tracker & Topic Completion")
 
@@ -355,14 +458,11 @@ elif page == "📈 Progress Tracker":
     db.close()
 
 
-# ==========================================
 # PAGE 7: AI CAREER ASSISTANT
-# ==========================================
 elif page == "🤖 AI Career Assistant":
     st.title("🤖 NEXUS AI Career Coach")
     st.markdown("Ask anything about career goals, missing skills, roadmaps, or project guidance.")
 
-    # Render Chat History
     for msg in st.session_state.chat_history:
         with st.chat_message(msg["role"]):
             st.write(msg["content"])
@@ -378,6 +478,6 @@ elif page == "🤖 AI Career Assistant":
                 db = get_db_session()
                 agent_res = orchestrator_agent.process_request(user.id, user_input, db)
                 db.close()
-                
+
                 st.markdown(agent_res.response_text)
                 st.session_state.chat_history.append({"role": "assistant", "content": agent_res.response_text})

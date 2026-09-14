@@ -1,11 +1,43 @@
 """
 NEXUS AI Agent - User Pydantic Schemas
-Defines request and response schemas for user profile, skills, and career goals.
+Defines request and response schemas for authentication, profile, skills, and career goals.
 """
 
 from datetime import datetime
 from typing import List, Optional
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, EmailStr
+
+# --- AUTHENTICATION SCHEMAS ---
+
+class UserRegister(BaseModel):
+    name: str = Field(..., description="User full name")
+    email: str = Field(..., description="User email address")
+    password: str = Field(..., description="Password (min 6 characters)")
+
+class UserLogin(BaseModel):
+    email: str = Field(..., description="Registered email address")
+    password: str = Field(..., description="Account password")
+
+class GoogleAuthInput(BaseModel):
+    email: str
+    name: Optional[str] = None
+    google_id: Optional[str] = None
+
+class PasswordResetRequest(BaseModel):
+    email: str
+
+class PasswordResetConfirm(BaseModel):
+    token: str
+    new_password: str
+
+class AuthTokenResponse(BaseModel):
+    user_id: int
+    email: str
+    name: str
+    access_token: str
+    token_type: str = "bearer"
+
+# --- PROFILE & SKILL SCHEMAS ---
 
 class SkillBase(BaseModel):
     skill_name: str = Field(..., description="Name of the skill, e.g. Python, Java")
@@ -38,6 +70,7 @@ class CareerGoalResponse(CareerGoalBase):
 
 class UserCreate(BaseModel):
     name: str = Field(..., description="User full name")
+    email: Optional[str] = Field(None, description="User email address")
     education: Optional[str] = Field(None, description="Degree or educational background")
     experience_level: str = Field("Beginner", description="Experience level: Beginner, Intermediate, Advanced")
     career_goal: str = Field(..., description="Primary target career role")
@@ -51,6 +84,7 @@ class UserUpdate(BaseModel):
 
 class UserProfileResponse(BaseModel):
     id: int
+    email: str
     name: str
     education: Optional[str]
     experience_level: str

@@ -4,15 +4,21 @@ Defines tables for USERS, USER_SKILLS, CAREER_GOALS, ROADMAPS, ROADMAP_ITEMS, US
 """
 
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Text, ForeignKey, DateTime, Float
+from sqlalchemy import Column, Integer, String, Text, ForeignKey, DateTime, Boolean
 from sqlalchemy.orm import relationship
 from database.database import Base
 
 class User(Base):
-    """Stores main user profile information."""
+    """Stores main user profile information and authentication credentials."""
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
+    auth_id = Column(String(100), unique=True, index=True, nullable=True)  # UUID or Supabase/Google Auth ID
+    email = Column(String(255), unique=True, index=True, nullable=True)
+    password_hash = Column(String(255), nullable=True)  # Nullable for OAuth users
+    auth_provider = Column(String(50), default="email")  # "email" or "google"
+    is_email_verified = Column(Boolean, default=False)
+
     name = Column(String(100), nullable=False)
     education = Column(String(200), nullable=True)
     experience_level = Column(String(50), default="Beginner")  # Beginner, Intermediate, Advanced
@@ -33,7 +39,7 @@ class CareerGoal(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    target_role = Column(String(100), nullable=False)  # e.g., AI Engineer, Full Stack Developer
+    target_role = Column(String(100), nullable=False)
     timeframe_months = Column(Integer, default=6)
     target_salary_tier = Column(String(50), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -49,7 +55,7 @@ class UserSkill(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     skill_name = Column(String(100), nullable=False)
-    proficiency_level = Column(String(50), default="Beginner")  # Beginner, Intermediate, Advanced
+    proficiency_level = Column(String(50), default="Beginner")
     status = Column(String(50), default="COMPLETED")  # COMPLETED, IN_PROGRESS, MISSING, OPTIONAL
 
     user = relationship("User", back_populates="skills")
@@ -81,7 +87,7 @@ class RoadmapItem(Base):
     objectives = Column(Text, nullable=True)
     duration = Column(String(100), default="4 Weeks")
     practice_tasks = Column(Text, nullable=True)
-    status = Column(String(50), default="PENDING")  # PENDING, IN_PROGRESS, COMPLETED
+    status = Column(String(50), default="PENDING")
 
     roadmap = relationship("Roadmap", back_populates="items")
 
@@ -107,8 +113,8 @@ class ProjectRecommendation(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     title = Column(String(150), nullable=False)
     description = Column(Text, nullable=False)
-    level = Column(String(50), default="BEGINNER")  # BEGINNER, INTERMEDIATE, ADVANCED
+    level = Column(String(50), default="BEGINNER")
     required_skills = Column(String(255), nullable=True)
-    status = Column(String(50), default="RECOMMENDED")  # RECOMMENDED, IN_PROGRESS, COMPLETED
+    status = Column(String(50), default="RECOMMENDED")
 
     user = relationship("User", back_populates="projects")
