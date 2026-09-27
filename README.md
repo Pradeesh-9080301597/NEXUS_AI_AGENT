@@ -1,3 +1,5 @@
+NEXUS URL : https://nexusaiagent-hd2tpkysbx2yjn8xohckks.streamlit.app/#welcome-back-pradeesh
+
 # NEXUS – AI Career Intelligence Agent
 
 NEXUS is an autonomous, tool-augmented **AI Career Intelligence Agent** designed for students, fresh graduates, and career switchers. It analyzes user skills, identifies career skill gaps, generates month-by-month learning roadmaps, recommends difficulty-categorized portfolio projects, tracks completed learning progress, and persists profile context using a SQLite database and an intelligent AI Orchestrator Agent.
