@@ -227,8 +227,11 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return AuthService.verify_password(plain_password, hashed_password)
 
 def login_user(email: str, password: str, db: Session) -> Optional[User]:
-    res = auth_service.login_user(email, password, db)
-    return res.get("user") if isinstance(res, dict) else res
+    try:
+        res = auth_service.login_user(email, password, db)
+        return res.get("user") if isinstance(res, dict) else res
+    except ValueError:
+        return None
 
 def register_user(arg1: str, arg2: str, arg3: Optional[str] = None, arg4: Optional[Any] = None, db: Optional[Session] = None) -> User:
     if "@" in arg1:
