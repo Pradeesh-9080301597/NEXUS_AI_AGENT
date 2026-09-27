@@ -5,8 +5,19 @@ Configures SQLite database connection using SQLAlchemy with auto-migration suppo
 
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import sessionmaker, declarative_base
-from config import settings
-from utils.logger import logger
+try:
+    from config import settings
+    from utils.logger import logger
+except ImportError:
+    try:
+        from ..config import settings
+        from ..utils.logger import logger
+    except Exception:
+        import sys
+        from pathlib import Path
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+        from config import settings
+        from utils.logger import logger
 
 # Create SQLite SQLAlchemy Engine
 connect_args = {"check_same_thread": False} if settings.DATABASE_URL.startswith("sqlite") else {}

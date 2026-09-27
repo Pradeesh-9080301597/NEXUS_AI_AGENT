@@ -6,7 +6,10 @@ Defines normalized entities for USERS, PROFILES, SKILLS, USER_SKILLS, CAREER_GOA
 from datetime import datetime
 from sqlalchemy import Column, Integer, String, Text, ForeignKey, DateTime, Boolean, Float
 from sqlalchemy.orm import relationship
-from database.database import Base
+try:
+    from database.database import Base
+except ImportError:
+    from .database import Base
 
 class User(Base):
     """Stores main user profile information and authentication credentials."""

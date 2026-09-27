@@ -1,15 +1,16 @@
-"""
-NEXUS AI 2.0 — AI Career Intelligence Platform
-Streamlit Main Application Shell with Stitch UI Design System & Authentication.
-"""
+import sys
+import os
+import traceback
+from pathlib import Path
+
+# Ensure application root directory is at the beginning of sys.path
+ROOT_DIR = Path(__file__).resolve().parent
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
 
 import streamlit as st
-from sqlalchemy.orm import Session
-from database.database import SessionLocal, init_db
-from database.models import User, Profile, CareerGoal
-from ui.styles import inject_stitch_css
 
-# Page Configuration
+# Page Configuration MUST be the first Streamlit command executed
 st.set_page_config(
     page_title="NEXUS AI 2.0 — Career Intelligence Platform",
     page_icon="⚡",
@@ -17,11 +18,30 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# Robust import guard with unredacted in-browser diagnostics for Cloud deployments
+try:
+    from sqlalchemy.orm import Session
+    from database.database import SessionLocal, init_db
+    from database.models import User, Profile, CareerGoal
+    from ui.styles import inject_stitch_css
+except Exception as startup_err:
+    st.error(f"❌ Application Startup Error: {type(startup_err).__name__}: {startup_err}")
+    st.code(traceback.format_exc(), language="python")
+    st.info("💡 If running on Streamlit Cloud, verify dependencies in requirements.txt.")
+    st.stop()
+
 # Inject Stitch CSS Theme
-inject_stitch_css()
+try:
+    inject_stitch_css()
+except Exception:
+    pass
 
 # Initialize Database Schema
-init_db()
+try:
+    init_db()
+except Exception as db_err:
+    st.warning(f"Database schema initialization warning: {db_err}")
+
 
 def get_db_session() -> Session:
     return SessionLocal()
