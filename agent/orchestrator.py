@@ -114,3 +114,29 @@ class OrchestratorAgent:
         )
 
 orchestrator_agent = OrchestratorAgent()
+
+
+def run_agent_pipeline(user_message: str, user_id: int, db: Optional[Session] = None) -> Dict[str, Any]:
+    """
+    Module-level wrapper for views to call without managing a db session directly.
+    Creates its own DB session if one is not provided. Returns a plain dict.
+    """
+    from database.database import SessionLocal
+    own_db = False
+    if db is None:
+        db = SessionLocal()
+        own_db = True
+    try:
+        result = orchestrator_agent.process_request(user_id=user_id, user_message=user_message, db=db)
+        return {
+            "agent_response": result.response_text,
+            "intent": result.intent,
+            "action_taken": result.action_taken,
+            "executed_tools": result.executed_tools,
+            "data": result.data,
+        }
+    except Exception as exc:
+        return {"agent_response": f"Agent encountered an error: {exc}", "error": str(exc)}
+    finally:
+        if own_db:
+            db.close()

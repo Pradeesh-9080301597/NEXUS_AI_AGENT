@@ -218,3 +218,38 @@ class AuthService:
         return True
 
 auth_service = AuthService()
+
+# Module-level exported functions for view imports
+def hash_password(password: str) -> str:
+    return AuthService.hash_password(password)
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    return AuthService.verify_password(plain_password, hashed_password)
+
+def login_user(email: str, password: str, db: Session) -> Optional[User]:
+    res = auth_service.login_user(email, password, db)
+    return res.get("user") if isinstance(res, dict) else res
+
+def register_user(arg1: str, arg2: str, arg3: Optional[str] = None, arg4: Optional[Any] = None, db: Optional[Session] = None) -> User:
+    if "@" in arg1:
+        email, password, name = arg1, arg2, arg3 or arg1.split("@")[0]
+        session = arg4 if isinstance(arg4, Session) else db
+        exp = None
+    elif "@" in arg2:
+        name, email, password = arg1, arg2, arg3
+        exp = arg4 if isinstance(arg4, str) else None
+        session = db if isinstance(db, Session) else (arg4 if isinstance(arg4, Session) else None)
+    else:
+        email, password, name, session = arg1, arg2, arg3, db
+        exp = None
+
+    if session is None:
+        raise ValueError("Database session (db) is required for registration.")
+
+    res = auth_service.register_user(email=email, password=password, name=name, db=session)
+    user_obj = res.get("user") if isinstance(res, dict) else res
+    if exp and hasattr(user_obj, "experience_level"):
+        user_obj.experience_level = exp
+        session.commit()
+    return user_obj
+
